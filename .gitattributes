@@ -1,0 +1,13 @@
+# Handle line endings automatically for files detected as text
+* text=auto
+
+# Jupyter notebooks
+*.ipynb linguist-documentation=false
+*.ipynb linguist-detectable=true
+*.ipynb linguist-language=Jupyter Notebook
+
+# Python files
+*.py linguist-language=Python
+
+# Markdown files
+*.md linguist-documentation
