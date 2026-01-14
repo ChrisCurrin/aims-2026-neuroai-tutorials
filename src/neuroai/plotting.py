@@ -1709,3 +1709,260 @@ def plot_energy_analysis(
         showlegend=False,
     )
     fig.show()
+
+
+# =============================================================================
+# STDP Tutorial Plotting Functions
+# =============================================================================
+
+
+def plot_input_spike_train(
+    input_spikes: np.ndarray,
+    pattern_times: list[float],
+    pattern_duration: float,
+    n_steps: int,
+    dt: float = 1.0,
+    title: str = "Input Spike Train",
+) -> None:
+    """
+    Plots the input spike train, highlighting the embedded patterns.
+    Shows the first and last 1000 ms.
+
+    Args:
+        input_spikes: Boolean array of shape (n_steps, n_inputs)
+        pattern_times: List of start times for the pattern
+        pattern_duration: Duration of the pattern in steps/ms
+        n_steps: Total number of steps
+        dt: Time step (ms)
+        title: Plot title
+    """
+    # Visualize a segment of input
+    # Transpose for visualization (Neurons on y-axis, Time on x-axis)
+    input_segment_start = input_spikes[:1000].T
+    input_segment_end = input_spikes[-1000:].T
+
+    fig = make_subplots(rows=2, cols=1, subplot_titles=("First 1000ms", "Last 1000ms"))
+
+    fig.add_trace(
+        go.Heatmap(
+            z=input_segment_start.astype(int),
+            x=np.arange(input_segment_start.shape[1]),
+            y=np.arange(input_segment_start.shape[0]),
+            colorscale="Greys",
+            colorbar=dict(title="Spike"),
+        ),
+        row=1,
+        col=1,
+    )
+
+    fig.add_trace(
+        go.Heatmap(
+            z=input_segment_end.astype(int),
+            x=np.arange(input_segment_end.shape[1]),
+            y=np.arange(input_segment_end.shape[0]),
+            colorscale="Greys",
+            colorbar=dict(title="Spike"),
+        ),
+        row=2,
+        col=1,
+    )
+
+    # Highlight patterns
+    for t in pattern_times:
+        if t < 1000:
+            fig.add_vrect(
+                x0=t, x1=t + pattern_duration, fillcolor="red", opacity=0.2, line_width=0, row=1
+            )
+        if t >= n_steps - 1000:
+            fig.add_vrect(
+                x0=t - (n_steps - 1000),
+                x1=t - (n_steps - 1000) + pattern_duration,
+                fillcolor="red",
+                opacity=0.2,
+                line_width=0,
+                row=2,
+            )
+
+    fig.update_layout(
+        title=title,
+        xaxis_title="Time (ms)",
+        yaxis_title="Input Neuron ID",
+        height=600,
+    )
+    fig.show()
+
+
+def plot_stdp_simulation_results(
+    v_rec: np.ndarray,
+    output_spikes: list[int] | list[float],
+    input_spikes: np.ndarray,
+    weights_rec: np.ndarray,
+    pattern_times: list[float],
+    pattern_duration: float,
+    pattern_indices: np.ndarray,
+    non_pattern_indices: np.ndarray,
+    dt: float = 1.0,
+    title: str = "Simulation Results",
+) -> None:
+    """
+    Plots the membrane potential, spike raster, and weight evolution for the STDP simulation.
+
+    Args:
+        v_rec: Recorded membrane potential trace
+        output_spikes: List of output spike times
+        input_spikes: Boolean array of input spikes
+        weights_rec: Recorded weights over time
+        pattern_times: List of pattern start times
+        pattern_duration: Duration of pattern
+        pattern_indices: Indices of neurons involved in the pattern
+        non_pattern_indices: Indices of neurons NOT involved in the pattern
+        dt: Time step
+        title: Plot title
+    """
+    n_steps = v_rec.shape[0]
+    n_inputs = input_spikes.shape[1]
+
+    fig = make_subplots(
+        rows=3,
+        cols=1,
+        shared_xaxes=True,
+        vertical_spacing=0.1,
+        subplot_titles=(
+            "Membrane Potential",
+            "Spike Raster",
+            "Evolution of Synaptic Weights",
+        ),
+    )
+
+    # 1. Membrane Potential
+    fig.add_trace(go.Scatter(y=v_rec, mode="lines", name="Membrane Potential"), row=1, col=1)
+    # Mark output spikes
+    for t in output_spikes:
+        fig.add_vline(x=t, line_color="red", opacity=0.5, row=1, col=1)
+
+    # 2. Input/Output Raster
+    rows, cols = np.where(input_spikes)
+    fig.add_trace(
+        go.Scatter(
+            x=rows,
+            y=cols,
+            mode="markers",
+            marker=dict(size=2, color="black"),
+            name="Input Spikes",
+        ),
+        row=2,
+        col=1,
+    )
+
+    # Plot output spikes
+    fig.add_trace(
+        go.Scatter(
+            x=output_spikes,
+            y=[n_inputs] * len(output_spikes),
+            mode="markers",
+            marker=dict(symbol="triangle-down", size=10, color="red"),
+            name="Output Spikes",
+        ),
+        row=2,
+        col=1,
+    )
+
+    # Highlight patterns in raster
+    for t in pattern_times:
+        fig.add_vrect(
+            x0=t,
+            x1=t + pattern_duration,
+            fillcolor="green",
+            opacity=0.1,
+            line_width=0,
+            row=2,
+            col=1,
+        )
+
+    # 3. Weight Evolution
+    mean_w_pattern = np.mean(weights_rec[:, pattern_indices], axis=1)
+    mean_w_noise = np.mean(weights_rec[:, non_pattern_indices], axis=1)
+
+    time_axis = np.linspace(0, n_steps * dt, len(mean_w_pattern))
+
+    fig.add_trace(
+        go.Scatter(
+            x=time_axis,
+            y=mean_w_pattern,
+            mode="lines",
+            name="Pattern Synapses",
+            line=dict(color="green"),
+        ),
+        row=3,
+        col=1,
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=time_axis,
+            y=mean_w_noise,
+            mode="lines",
+            name="Noise Synapses",
+            line=dict(color="gray"),
+        ),
+        row=3,
+        col=1,
+    )
+
+    fig.update_layout(height=900, showlegend=True, title=title)
+    fig.update_xaxes(title_text="Time (ms)", row=3, col=1)
+    fig.update_yaxes(title_text="Voltage (mV)", row=1, col=1)
+    fig.update_yaxes(title_text="Neuron ID", row=2, col=1)
+    fig.update_yaxes(title_text="Average Weight", row=3, col=1)
+
+    fig.show()
+
+
+def plot_weight_evolution(
+    weights_rec: np.ndarray,
+    pattern_indices: np.ndarray,
+    non_pattern_indices: np.ndarray,
+    n_steps: int,
+    dt: float = 1.0,
+    title: str = "Weight Evolution",
+) -> None:
+    """
+    Plots the evolution of synaptic weights for pattern and noise synapses.
+
+    Args:
+        weights_rec: Recorded weights over time
+        pattern_indices: Indices of neurons involved in the pattern
+        non_pattern_indices: Indices of neurons NOT involved in the pattern
+        n_steps: Total number of simulation steps
+        dt: Time step
+        title: Plot title
+    """
+    mean_w_pattern = np.mean(weights_rec[:, pattern_indices], axis=1)
+    mean_w_noise = np.mean(weights_rec[:, non_pattern_indices], axis=1)
+
+    time_axis = np.linspace(0, n_steps * dt, len(mean_w_pattern))
+
+    fig = go.Figure()
+    fig.add_trace(
+        go.Scatter(
+            x=time_axis,
+            y=mean_w_pattern,
+            mode="lines",
+            name="Pattern Synapses",
+            line=dict(color="green"),
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=time_axis,
+            y=mean_w_noise,
+            mode="lines",
+            name="Noise Synapses",
+            line=dict(color="gray"),
+        )
+    )
+    fig.update_layout(
+        title=title,
+        xaxis_title="Time (ms)",
+        yaxis_title="Average Weight",
+    )
+    fig.show()
